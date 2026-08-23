@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgRole {
+  org_admin
+  member
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  review
+  done
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum OutboxStatus {
+  pending
+  enqueued
+  completed
+  failed
+}
+
+model User {
+  id            String           @id @default(uuid()) @db.Uuid
+  email         String           @unique
+  name          String
+  passwordHash  String           @map("password_hash")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  memberships   OrgMember[]
+  assignments   TaskAssignment[]
+  comments      Comment[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model Organization {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  members       OrgMember[]
+  projects      Project[]
+  refreshTokens RefreshToken[]
+  notifications NotificationOutbox[]
+
+  @@map("organizations")
+}
+
+model OrgMember {
+  orgId     String       @db.Uuid @map("org_id")
+  userId    String       @db.Uuid @map("user_id")
+  role      OrgRole      @default(member)
+  createdAt DateTime     @default(now()) @map("created_at")
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+  @@index([userId])
+  @@index([orgId, role])
+  @@map("org_members")
+}
+
+model Project {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @db.Uuid @map("org_id")
+  name        String
+  description String?
+  deletedAt   DateTime?    @map("deleted_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  tasks       Task[]
+
+  @@index([orgId, deletedAt])
+  @@index([orgId, createdAt])
+  @@map("projects")
+}
+
+model Task {
+  id          String           @id @default(uuid()) @db.Uuid
+  projectId   String           @db.Uuid @map("project_id")
+  title       String
+  description String?
+  status      TaskStatus       @default(todo)
+  priority    Priority         @default(medium)
+  dueDate     DateTime?        @map("due_date")
+  deletedAt   DateTime?        @map("deleted_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments TaskAssignment[]
+  comments    Comment[]
+
+  @@index([projectId, status, deletedAt])
+  @@index([projectId, priority, deletedAt])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+model TaskAssignment {
+  id         String   @id @default(uuid()) @db.Uuid
+  taskId     String   @db.Uuid @map("task_id")
+  userId     String   @db.Uuid @map("user_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification NotificationOutbox?
+
+  @@unique([taskId, userId])
+  @@index([userId, assignedAt])
+  @@map("task_assignments")
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  taskId    String   @db.Uuid @map("task_id")
+  authorId  String   @db.Uuid @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+  @@map("comments")
+}
+
+model NotificationOutbox {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @db.Uuid @map("org_id")
+  assignmentId String?      @unique @db.Uuid @map("assignment_id")
+  type         String
+  payload      Json
+  status       OutboxStatus @default(pending)
+  jobId        String?      @unique @map("job_id")
+  lastError    String?      @map("last_error")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  enqueuedAt   DateTime?    @map("enqueued_at")
+  completedAt  DateTime?    @map("completed_at")
+  failedAt     DateTime?    @map("failed_at")
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignment   TaskAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([orgId, createdAt])
+  @@map("notification_outbox")
+}
+
+model RefreshToken {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @db.Uuid @map("user_id")
+  orgId     String        @db.Uuid @map("org_id")
+  tokenHash String        @unique @map("token_hash")
+  expiresAt DateTime      @map("expires_at")
+  revokedAt DateTime?     @map("revoked_at")
+  createdAt DateTime      @default(now()) @map("created_at")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org       Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([userId, orgId, revokedAt])
+  @@map("refresh_tokens")
+}

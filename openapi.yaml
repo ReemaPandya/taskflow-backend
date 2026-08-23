@@ -1,0 +1,489 @@
+openapi: 3.0.3
+info:
+  title: TaskFlow API
+  version: 1.0.0
+  description: Secure multi-tenant project and task management API.
+servers:
+  - url: http://localhost:3000
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      required: [error, code, details]
+      properties:
+        error: { type: string }
+        code: { type: string }
+        details: { type: object, additionalProperties: true }
+    Tokens:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, example: 900 }
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orgId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        deletedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ProjectCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, nullable: true, maxLength: 5000 }
+    ProjectPatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, nullable: true, maxLength: 5000 }
+    Task:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [todo, in_progress, review, done] }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        dueDate: { type: string, format: date-time, nullable: true }
+        deletedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TaskCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, nullable: true, maxLength: 10000 }
+        status: { type: string, enum: [todo, in_progress, review, done] }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        dueDate: { type: string, format: date-time, nullable: true }
+    TaskPatch:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, nullable: true, maxLength: 10000 }
+        status: { type: string, enum: [todo, in_progress, review, done] }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        dueDate: { type: string, format: date-time, nullable: true }
+    Pagination:
+      type: object
+      properties:
+        data: { type: array, items: {} }
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+    JobStatus:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [pending, active, completed, failed] }
+        name: { type: string }
+        attemptsMade: { type: integer, nullable: true }
+        maxAttempts: { type: integer }
+        failedReason: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+        timestamps: { type: object, additionalProperties: true }
+  responses:
+    Unauthorized:
+      description: Authentication required or token invalid
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Cross-tenant or role-based access forbidden
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ValidationError:
+      description: Request validation failed
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Check PostgreSQL and Redis connectivity
+      responses:
+        '200': { description: Healthy }
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a user and create an organization
+      description: Rate limited to 10 requests/minute/IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, password, organizationName]
+              properties:
+                email: { type: string, format: email }
+                name: { type: string, minLength: 2, maxLength: 100 }
+                password: { type: string, minLength: 8, maxLength: 128 }
+                organizationName: { type: string, minLength: 2, maxLength: 120 }
+      responses:
+        '201': { description: Registered }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: Email already registered }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and select an organization context
+      description: Rate limited to 10 requests/minute/IP. organizationId is optional and always membership-validated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                organizationId: { type: string, format: uuid }
+      responses:
+        '200': { description: Logged in }
+        '401': { description: Invalid credentials }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token
+      description: Rate limited to 10 requests/minute/IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties: { refreshToken: { type: string } }
+      responses:
+        '200':
+          description: New token pair
+          content: { application/json: { schema: { $ref: '#/components/schemas/Tokens' } } }
+        '401': { description: Invalid/revoked/used refresh token }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke one refresh token
+      description: Rate limited to 10 requests/minute/IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties: { refreshToken: { type: string } }
+      responses: { '204': { description: Logged out } }
+
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      security: [{ bearerAuth: [] }]
+      summary: Revoke all refresh tokens for current user/organization
+      responses:
+        '204': { description: All active refresh tokens revoked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /organization/members:
+    get:
+      tags: [Organization]
+      security: [{ bearerAuth: [] }]
+      summary: List members in authenticated organization
+      responses:
+        '200': { description: Member list }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Organization]
+      security: [{ bearerAuth: [] }]
+      summary: Add a member (org_admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                name: { type: string }
+                password: { type: string, minLength: 8 }
+                role: { type: string, enum: [org_admin, member], default: member }
+      responses:
+        '201': { description: Member added }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /organization/members/{userId}:
+    parameters:
+      - { in: path, name: userId, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Organization]
+      security: [{ bearerAuth: [] }]
+      summary: Change a member role (org_admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties: { role: { type: string, enum: [org_admin, member] } }
+      responses:
+        '200': { description: Membership updated }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Member not found }
+    delete:
+      tags: [Organization]
+      security: [{ bearerAuth: [] }]
+      summary: Remove a member (org_admin)
+      responses:
+        '204': { description: Member removed }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Member not found }
+
+  /projects:
+    get:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: List projects in authenticated organization
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Offset-paginated projects }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: Create project
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProjectCreate' } } }
+      responses:
+        '201': { description: Project created, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /projects/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: Get project
+      responses:
+        '200': { description: Project, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Project not found }
+    patch:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: Update project
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProjectPatch' } } }
+      responses:
+        '200': { description: Updated project }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: Soft-delete project (org_admin)
+      responses:
+        '204': { description: Project deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /projects/{id}/dashboard:
+    get:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: Get task counts grouped by status
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Dashboard aggregation }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /projects/{projectId}/tasks:
+    parameters:
+      - { in: path, name: projectId, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Tasks]
+      security: [{ bearerAuth: [] }]
+      summary: List/filter project tasks
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [todo, in_progress, review, done] } }
+        - { in: query, name: priority, schema: { type: string, enum: [low, medium, high, urgent] } }
+        - { in: query, name: assignee, schema: { type: string, format: uuid } }
+        - { in: query, name: dueFrom, schema: { type: string, format: date-time } }
+        - { in: query, name: dueTo, schema: { type: string, format: date-time } }
+        - { in: query, name: page, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: Offset-paginated tasks }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Tasks]
+      security: [{ bearerAuth: [] }]
+      summary: Create task
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TaskCreate' } } }
+      responses:
+        '201': { description: Task created }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /tasks/search:
+    get:
+      tags: [Tasks]
+      security: [{ bearerAuth: [] }]
+      summary: PostgreSQL full-text task search
+      parameters:
+        - { in: query, name: q, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+        - { in: query, name: page, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: Search results }
+
+  /tasks/bulk-status:
+    post:
+      tags: [Tasks]
+      security: [{ bearerAuth: [] }]
+      summary: Bulk task status update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [taskIds, status]
+              properties:
+                taskIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, format: uuid }
+                status: { type: string, enum: [todo, in_progress, review, done] }
+      responses:
+        '200': { description: Updated count }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /tasks/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Tasks]
+      security: [{ bearerAuth: [] }]
+      summary: Get task
+      responses:
+        '200': { description: Task }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Task not found }
+    patch:
+      tags: [Tasks]
+      security: [{ bearerAuth: [] }]
+      summary: Update task
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TaskPatch' } } }
+      responses:
+        '200': { description: Updated task }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [Tasks]
+      security: [{ bearerAuth: [] }]
+      summary: Soft-delete task
+      responses:
+        '204': { description: Task deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /tasks/{taskId}/assignments:
+    post:
+      tags: [Assignments]
+      security: [{ bearerAuth: [] }]
+      summary: Assign a same-organization user and enqueue notification
+      parameters:
+        - { in: path, name: taskId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties: { userId: { type: string, format: uuid } }
+      responses:
+        '201': { description: New assignment created and notification enqueued }
+        '200': { description: Previously pending assignment recovered and notification enqueued }
+        '400': { description: Assignee is not in organization }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Duplicate/existing assignment }
+        '503': { description: Assignment persisted with durable pending outbox; enqueue will be retried }
+
+  /tasks/{taskId}/assignments/{userId}:
+    delete:
+      tags: [Assignments]
+      security: [{ bearerAuth: [] }]
+      summary: Unassign a user
+      parameters:
+        - { in: path, name: taskId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: userId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Unassigned }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Task/assignment not found }
+
+  /tasks/{taskId}/comments:
+    parameters:
+      - { in: path, name: taskId, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Comments]
+      security: [{ bearerAuth: [] }]
+      summary: List task comments
+      responses:
+        '200': { description: Comments ordered oldest to newest }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Comments]
+      security: [{ bearerAuth: [] }]
+      summary: Add a task comment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties: { body: { type: string, minLength: 1, maxLength: 5000 } }
+      responses:
+        '201': { description: Comment created }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /jobs/{id}:
+    get:
+      tags: [Jobs]
+      security: [{ bearerAuth: [] }]
+      summary: Get tenant-protected email job status
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Job status, content: { application/json: { schema: { $ref: '#/components/schemas/JobStatus' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Job not found }

@@ -1,0 +1,53 @@
+{
+  "name": "taskflow-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TaskFlow multi-tenant backend technical assignment",
+  "main": "dist/src/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "worker:dev": "tsx watch src/workers/email.worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/server.js",
+    "worker": "node dist/src/workers/email.worker.js",
+    "prisma:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "test": "vitest run tests/unit",
+    "test:integration": "dotenv -e .env.test -- vitest run tests/integration",
+    "test:all": "npm run test && npm run test:integration",
+    "test:coverage": "vitest run tests/unit --coverage",
+    "test:coverage:all": "dotenv -e .env.test -- vitest run --coverage"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fastify/cors": "9.0.1",
+    "@fastify/rate-limit": "9.1.0",
+    "@fastify/swagger": "8.15.0",
+    "@fastify/swagger-ui": "2.1.0",
+    "@prisma/client": "5.22.0",
+    "bcrypt": "5.1.1",
+    "bullmq": "5.12.12",
+    "fastify": "4.28.1",
+    "ioredis": "5.4.1",
+    "jsonwebtoken": "9.0.2",
+    "prisma": "5.22.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "5.0.2",
+    "@types/jsonwebtoken": "9.0.7",
+    "@types/node": "22.7.4",
+    "@vitest/coverage-v8": "2.1.2",
+    "dotenv-cli": "7.4.2",
+    "tsx": "4.19.1",
+    "typescript": "5.6.2",
+    "vitest": "2.1.2"
+  }
+}
