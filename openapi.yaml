@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: Secure multi-tenant project and task management API.
 servers:
-  - url: http://localhost:3000
+  - url: /
 components:
   securitySchemes:
     bearerAuth:
@@ -101,13 +101,16 @@ components:
   responses:
     Unauthorized:
       description: Authentication required or token invalid
-      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     Forbidden:
       description: Cross-tenant or role-based access forbidden
-      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     ValidationError:
       description: Request validation failed
-      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
 
 paths:
   /health:
@@ -115,7 +118,7 @@ paths:
       tags: [System]
       summary: Check PostgreSQL and Redis connectivity
       responses:
-        '200': { description: Healthy }
+        "200": { description: Healthy }
 
   /auth/register:
     post:
@@ -135,9 +138,9 @@ paths:
                 password: { type: string, minLength: 8, maxLength: 128 }
                 organizationName: { type: string, minLength: 2, maxLength: 120 }
       responses:
-        '201': { description: Registered }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '409': { description: Email already registered }
+        "201": { description: Registered }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { description: Email already registered }
 
   /auth/login:
     post:
@@ -156,9 +159,9 @@ paths:
                 password: { type: string }
                 organizationId: { type: string, format: uuid }
       responses:
-        '200': { description: Logged in }
-        '401': { description: Invalid credentials }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "200": { description: Logged in }
+        "401": { description: Invalid credentials }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /auth/refresh:
     post:
@@ -174,10 +177,14 @@ paths:
               required: [refreshToken]
               properties: { refreshToken: { type: string } }
       responses:
-        '200':
+        "200":
           description: New token pair
-          content: { application/json: { schema: { $ref: '#/components/schemas/Tokens' } } }
-        '401': { description: Invalid/revoked/used refresh token }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Tokens" } },
+            }
+        "401": { description: Invalid/revoked/used refresh token }
 
   /auth/logout:
     post:
@@ -192,7 +199,7 @@ paths:
               type: object
               required: [refreshToken]
               properties: { refreshToken: { type: string } }
-      responses: { '204': { description: Logged out } }
+      responses: { "204": { description: Logged out } }
 
   /auth/logout-all:
     post:
@@ -200,8 +207,8 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: Revoke all refresh tokens for current user/organization
       responses:
-        '204': { description: All active refresh tokens revoked }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        "204": { description: All active refresh tokens revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /organization/members:
     get:
@@ -209,8 +216,8 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: List members in authenticated organization
       responses:
-        '200': { description: Member list }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        "200": { description: Member list }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Organization]
       security: [{ bearerAuth: [] }]
@@ -226,14 +233,20 @@ paths:
                 email: { type: string, format: email }
                 name: { type: string }
                 password: { type: string, minLength: 8 }
-                role: { type: string, enum: [org_admin, member], default: member }
+                role:
+                  { type: string, enum: [org_admin, member], default: member }
       responses:
-        '201': { description: Member added }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "201": { description: Member added }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /organization/members/{userId}:
     parameters:
-      - { in: path, name: userId, required: true, schema: { type: string, format: uuid } }
+      - {
+          in: path,
+          name: userId,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
     patch:
       tags: [Organization]
       security: [{ bearerAuth: [] }]
@@ -247,17 +260,17 @@ paths:
               required: [role]
               properties: { role: { type: string, enum: [org_admin, member] } }
       responses:
-        '200': { description: Membership updated }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Member not found }
+        "200": { description: Membership updated }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Member not found }
     delete:
       tags: [Organization]
       security: [{ bearerAuth: [] }]
       summary: Remove a member (org_admin)
       responses:
-        '204': { description: Member removed }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Member not found }
+        "204": { description: Member removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Member not found }
 
   /projects:
     get:
@@ -265,50 +278,87 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: List projects in authenticated organization
       parameters:
-        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
-        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - {
+            in: query,
+            name: page,
+            schema: { type: integer, minimum: 1, default: 1 },
+          }
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
       responses:
-        '200': { description: Offset-paginated projects }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        "200": { description: Offset-paginated projects }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Projects]
       security: [{ bearerAuth: [] }]
       summary: Create project
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ProjectCreate' } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/ProjectCreate" } },
+          }
       responses:
-        '201': { description: Project created, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
-        '400': { $ref: '#/components/responses/ValidationError' }
+        "201":
+          {
+            description: Project created,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/Project" } },
+              },
+          }
+        "400": { $ref: "#/components/responses/ValidationError" }
 
   /projects/{id}:
     parameters:
-      - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      - {
+          in: path,
+          name: id,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
     get:
       tags: [Projects]
       security: [{ bearerAuth: [] }]
       summary: Get project
       responses:
-        '200': { description: Project, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Project not found }
+        "200":
+          {
+            description: Project,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/Project" } },
+              },
+          }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Project not found }
     patch:
       tags: [Projects]
       security: [{ bearerAuth: [] }]
       summary: Update project
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ProjectPatch' } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/ProjectPatch" } },
+          }
       responses:
-        '200': { description: Updated project }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "200": { description: Updated project }
+        "403": { $ref: "#/components/responses/Forbidden" }
     delete:
       tags: [Projects]
       security: [{ bearerAuth: [] }]
       summary: Soft-delete project (org_admin)
       responses:
-        '204': { description: Project deleted }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "204": { description: Project deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /projects/{id}/dashboard:
     get:
@@ -316,39 +366,73 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: Get task counts grouped by status
       parameters:
-        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - {
+            in: path,
+            name: id,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
-        '200': { description: Dashboard aggregation }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "200": { description: Dashboard aggregation }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /projects/{projectId}/tasks:
     parameters:
-      - { in: path, name: projectId, required: true, schema: { type: string, format: uuid } }
+      - {
+          in: path,
+          name: projectId,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
     get:
       tags: [Tasks]
       security: [{ bearerAuth: [] }]
       summary: List/filter project tasks
       parameters:
-        - { in: query, name: status, schema: { type: string, enum: [todo, in_progress, review, done] } }
-        - { in: query, name: priority, schema: { type: string, enum: [low, medium, high, urgent] } }
+        - {
+            in: query,
+            name: status,
+            schema: { type: string, enum: [todo, in_progress, review, done] },
+          }
+        - {
+            in: query,
+            name: priority,
+            schema: { type: string, enum: [low, medium, high, urgent] },
+          }
         - { in: query, name: assignee, schema: { type: string, format: uuid } }
-        - { in: query, name: dueFrom, schema: { type: string, format: date-time } }
-        - { in: query, name: dueTo, schema: { type: string, format: date-time } }
+        - {
+            in: query,
+            name: dueFrom,
+            schema: { type: string, format: date-time },
+          }
+        - {
+            in: query,
+            name: dueTo,
+            schema: { type: string, format: date-time },
+          }
         - { in: query, name: page, schema: { type: integer, minimum: 1 } }
-        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 100 },
+          }
       responses:
-        '200': { description: Offset-paginated tasks }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "200": { description: Offset-paginated tasks }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Tasks]
       security: [{ bearerAuth: [] }]
       summary: Create task
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/TaskCreate' } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/TaskCreate" } },
+          }
       responses:
-        '201': { description: Task created }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "201": { description: Task created }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /tasks/search:
     get:
@@ -356,11 +440,20 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: PostgreSQL full-text task search
       parameters:
-        - { in: query, name: q, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+        - {
+            in: query,
+            name: q,
+            required: true,
+            schema: { type: string, minLength: 1, maxLength: 200 },
+          }
         - { in: query, name: page, schema: { type: integer, minimum: 1 } }
-        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, minimum: 1, maximum: 100 },
+          }
       responses:
-        '200': { description: Search results }
+        "200": { description: Search results }
 
   /tasks/bulk-status:
     post:
@@ -380,39 +473,49 @@ paths:
                   minItems: 1
                   maxItems: 100
                   items: { type: string, format: uuid }
-                status: { type: string, enum: [todo, in_progress, review, done] }
+                status:
+                  { type: string, enum: [todo, in_progress, review, done] }
       responses:
-        '200': { description: Updated count }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "200": { description: Updated count }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /tasks/{id}:
     parameters:
-      - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      - {
+          in: path,
+          name: id,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
     get:
       tags: [Tasks]
       security: [{ bearerAuth: [] }]
       summary: Get task
       responses:
-        '200': { description: Task }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Task not found }
+        "200": { description: Task }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Task not found }
     patch:
       tags: [Tasks]
       security: [{ bearerAuth: [] }]
       summary: Update task
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/TaskPatch' } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/TaskPatch" } },
+          }
       responses:
-        '200': { description: Updated task }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "200": { description: Updated task }
+        "403": { $ref: "#/components/responses/Forbidden" }
     delete:
       tags: [Tasks]
       security: [{ bearerAuth: [] }]
       summary: Soft-delete task
       responses:
-        '204': { description: Task deleted }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "204": { description: Task deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /tasks/{taskId}/assignments:
     post:
@@ -420,7 +523,12 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: Assign a same-organization user and enqueue notification
       parameters:
-        - { in: path, name: taskId, required: true, schema: { type: string, format: uuid } }
+        - {
+            in: path,
+            name: taskId,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       requestBody:
         required: true
         content:
@@ -430,12 +538,18 @@ paths:
               required: [userId]
               properties: { userId: { type: string, format: uuid } }
       responses:
-        '201': { description: New assignment created and notification enqueued }
-        '200': { description: Previously pending assignment recovered and notification enqueued }
-        '400': { description: Assignee is not in organization }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { description: Duplicate/existing assignment }
-        '503': { description: Assignment persisted with durable pending outbox; enqueue will be retried }
+        "201": { description: New assignment created and notification enqueued }
+        "200":
+          {
+            description: Previously pending assignment recovered and notification enqueued,
+          }
+        "400": { description: Assignee is not in organization }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: Duplicate/existing assignment }
+        "503":
+          {
+            description: Assignment persisted with durable pending outbox; enqueue will be retried,
+          }
 
   /tasks/{taskId}/assignments/{userId}:
     delete:
@@ -443,23 +557,38 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: Unassign a user
       parameters:
-        - { in: path, name: taskId, required: true, schema: { type: string, format: uuid } }
-        - { in: path, name: userId, required: true, schema: { type: string, format: uuid } }
+        - {
+            in: path,
+            name: taskId,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            in: path,
+            name: userId,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
-        '204': { description: Unassigned }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Task/assignment not found }
+        "204": { description: Unassigned }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Task/assignment not found }
 
   /tasks/{taskId}/comments:
     parameters:
-      - { in: path, name: taskId, required: true, schema: { type: string, format: uuid } }
+      - {
+          in: path,
+          name: taskId,
+          required: true,
+          schema: { type: string, format: uuid },
+        }
     get:
       tags: [Comments]
       security: [{ bearerAuth: [] }]
       summary: List task comments
       responses:
-        '200': { description: Comments ordered oldest to newest }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "200": { description: Comments ordered oldest to newest }
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       tags: [Comments]
       security: [{ bearerAuth: [] }]
@@ -471,10 +600,11 @@ paths:
             schema:
               type: object
               required: [body]
-              properties: { body: { type: string, minLength: 1, maxLength: 5000 } }
+              properties:
+                { body: { type: string, minLength: 1, maxLength: 5000 } }
       responses:
-        '201': { description: Comment created }
-        '403': { $ref: '#/components/responses/Forbidden' }
+        "201": { description: Comment created }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /jobs/{id}:
     get:
@@ -484,6 +614,14 @@ paths:
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
-        '200': { description: Job status, content: { application/json: { schema: { $ref: '#/components/schemas/JobStatus' } } } }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Job not found }
+        "200":
+          {
+            description: Job status,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/JobStatus" } },
+              },
+          }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Job not found }
