@@ -31,6 +31,15 @@ export async function buildApp() {
     return { status: 'ok', postgres: 'ok', redis: pong === 'PONG' ? 'ok' : 'error' };
   });
 
+  app.get('/', async () => {
+    return {
+      name: 'TaskFlow API',
+      status: 'running',
+      documentation: '/docs',
+      health: '/health'
+    };
+  });
+
   await app.register(authRoutes);
   await app.register(memberRoutes);
   await app.register(projectRoutes);
